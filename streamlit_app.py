@@ -1,172 +1,287 @@
-import datetime
-import random
-
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+from viz import *
+from get_data import *
+from config import *
+from load_data import load_data
+import warnings
+warnings.filterwarnings("ignore")
+from xlsxwriter import Workbook
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.decomposition import PCA
+from pca_section import *
 
-# Show app title and description.
-st.set_page_config(page_title="Support tickets", page_icon="🎫")
-st.title("🎫 Support tickets")
-st.write(
-    """
-    This app shows how you can build an internal tool in Streamlit. Here, we are 
-    implementing a support ticket workflow. The user can create a ticket, edit 
-    existing tickets, and view some statistics.
-    """
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+
+@st.cache_data(ttl=3600)  # Atualiza os dados a cada 3600 segundos (1 hora)
+def get_data_cached():
+    return load_data()
+
+#################################################### BUILD DASHBOARD ############################################
+
+
+st.set_page_config(page_title=dashboard_main_title, layout="wide")
+st.markdown(f"<h1 style='color:{default_color1};'>{dashboard_main_title}</h1>", unsafe_allow_html=True)
+
+# white Logo
+st.sidebar.markdown(f'<a><img src="{travel_logo_url}" alt="Logo" style="width: 100%;"></a>', unsafe_allow_html=True)
+
+#################### gathering data ###################################################
+
+annual_data, df_final, final_dataset = get_data_cached()
+
+###########################################################################################
+
+st.sidebar.header("MENU:")
+indicador = st.sidebar.selectbox(
+    "CHOOSE A SECTION:", sidebar_indicators
 )
 
-# Create a random Pandas dataframe with existing tickets.
-if "df" not in st.session_state:
+#################################################### PCA ############################################################################################
 
-    # Set seed for reproducibility.
-    np.random.seed(42)
+if indicador == "Principal Components Analysis":
 
-    # Make up some fake issue descriptions.
-    issue_descriptions = [
-        "Network connectivity issues in the office",
-        "Software application crashing on startup",
-        "Printer not responding to print commands",
-        "Email server downtime",
-        "Data backup failure",
-        "Login authentication problems",
-        "Website performance degradation",
-        "Security vulnerability identified",
-        "Hardware malfunction in the server room",
-        "Employee unable to access shared files",
-        "Database connection failure",
-        "Mobile application not syncing data",
-        "VoIP phone system issues",
-        "VPN connection problems for remote employees",
-        "System updates causing compatibility issues",
-        "File server running out of storage space",
-        "Intrusion detection system alerts",
-        "Inventory management system errors",
-        "Customer data not loading in CRM",
-        "Collaboration tool not sending notifications",
-    ]
-
-    # Generate the dataframe with 100 rows/tickets.
-    data = {
-        "ID": [f"TICKET-{i}" for i in range(1100, 1000, -1)],
-        "Issue": np.random.choice(issue_descriptions, size=100),
-        "Status": np.random.choice(["Open", "In Progress", "Closed"], size=100),
-        "Priority": np.random.choice(["High", "Medium", "Low"], size=100),
-        "Date Submitted": [
-            datetime.date(2023, 6, 1) + datetime.timedelta(days=random.randint(0, 182))
-            for _ in range(100)
-        ],
-    }
-    df = pd.DataFrame(data)
-
-    # Save the dataframe in session state (a dictionary-like object that persists across
-    # page runs). This ensures our data is persisted when the app updates.
-    st.session_state.df = df
-
-
-# Show a section to add a new ticket.
-st.header("Add a ticket")
-
-# We're adding tickets via an `st.form` and some input widgets. If widgets are used
-# in a form, the app will only rerun once the submit button is pressed.
-with st.form("add_ticket_form"):
-    issue = st.text_area("Describe the issue")
-    priority = st.selectbox("Priority", ["High", "Medium", "Low"])
-    submitted = st.form_submit_button("Submit")
-
-if submitted:
-    # Make a dataframe for the new ticket and append it to the dataframe in session
-    # state.
-    recent_ticket_number = int(max(st.session_state.df.ID).split("-")[1])
-    today = datetime.datetime.now().strftime("%m-%d-%Y")
-    df_new = pd.DataFrame(
-        [
-            {
-                "ID": f"TICKET-{recent_ticket_number+1}",
-                "Issue": issue,
-                "Status": "Open",
-                "Priority": priority,
-                "Date Submitted": today,
-            }
-        ]
+    indicador = st.sidebar.selectbox(
+    "Choose a dataset to analyse:", ('Macroeconomic ECB data', 'BPSTAT Data', 'Macroeconomic ECB & BPSTAT data')
     )
 
-    # Show a little success message.
-    st.write("Ticket submitted! Here are the ticket details:")
-    st.dataframe(df_new, use_container_width=True, hide_index=True)
-    st.session_state.df = pd.concat([df_new, st.session_state.df], axis=0)
+    if indicador == 'Macroeconomic ECB data':
 
-# Show section to view and edit existing tickets in a table.
-st.header("Existing tickets")
-st.write(f"Number of tickets: `{len(st.session_state.df)}`")
+        st.markdown(container_style_html, unsafe_allow_html=True)
 
-st.info(
-    "You can edit the tickets by double clicking on a cell. Note how the plots below "
-    "update automatically! You can also sort the table by clicking on the column headers.",
-    icon="✍️",
-)
+        with st.container():
+            st.markdown(f"""    
+            <div style='text-align: center; margin-bottom: 30px;'>
+                <h1 style='color: {default_color1};'>Macroconomic ECB data - Principal Component Analysis</h1>
+                <p style='color: #666; font-size: 16px;'>Make your PCA analysis</p>
+            </div>
+            """, unsafe_allow_html=True)
 
-# Show the tickets dataframe with `st.data_editor`. This lets the user edit the table
-# cells. The edited data is returned as a new dataframe.
-edited_df = st.data_editor(
-    st.session_state.df,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Status": st.column_config.SelectboxColumn(
-            "Status",
-            help="Ticket status",
-            options=["Open", "In Progress", "Closed"],
-            required=True,
-        ),
-        "Priority": st.column_config.SelectboxColumn(
-            "Priority",
-            help="Priority",
-            options=["High", "Medium", "Low"],
-            required=True,
-        ),
-    },
-    # Disable editing the ID and Date Submitted columns.
-    disabled=["ID", "Date Submitted"],
-)
+            # Seção de visualização de dados
+        with st.expander("🔍 Data preview", expanded=False):
+            st.dataframe(annual_data.head(3), use_container_width=True, hide_index=True)
 
-# Show some metrics and charts about the ticket.
-st.header("Statistics")
+        # Seleção de colunas (sem nenhuma coluna selecionada por padrão)
+        selected_columns = st.multiselect(
+            "Choose the macroeconomic variables for the PCA:", options=annual_data.columns.tolist()[1:], default=['Unemployment rate, Portugal',
+                                                                               'Gross domestic product at market prices, Portugal',
+                                                                               'Government final consumption, Portugal']
+        )
 
-# Show metrics side by side using `st.columns` and `st.metric`.
-col1, col2, col3 = st.columns(3)
-num_open_tickets = len(st.session_state.df[st.session_state.df.Status == "Open"])
-col1.metric(label="Number of open tickets", value=num_open_tickets, delta=10)
-col2.metric(label="First response time (hours)", value=5.2, delta=-1.5)
-col3.metric(label="Average resolution time (hours)", value=16, delta=2)
+        if not selected_columns:
+            st.warning("Please, select at least 3 columns for the PCA.")
+        else:
 
-# Show two Altair charts using `st.altair_chart`.
-st.write("")
-st.write("##### Ticket status per month")
-status_plot = (
-    alt.Chart(edited_df)
-    .mark_bar()
-    .encode(
-        x="month(Date Submitted):O",
-        y="count():Q",
-        xOffset="Status:N",
-        color="Status:N",
-    )
-    .configure_legend(
-        orient="bottom", titleFontSize=14, labelFontSize=14, titlePadding=5
-    )
-)
-st.altair_chart(status_plot, use_container_width=True, theme="streamlit")
+            with st.expander("🔍 Dataframe for PCA", expanded=False):
+                # Verificar se o usuário selecionou colunas
+                if selected_columns:
+                    # Mostrar o DataFrame com as colunas selecionadas
+                    st.markdown(f"""<div style='text-align: center;'>
+                                        <h6 style='color: {default_color1};'>Dataframe with the selected columns</h6>
+                                    </div>""", unsafe_allow_html=True)
+                    
+                    st.dataframe(annual_data[selected_columns], use_container_width=True, hide_index=True)
+                else:
+                    st.markdown(f"""<div style='text-align: center;'>
+                                        <h6 style='color: {default_color1};'>Select variables for PCA</h6>
+                                    </div>""", unsafe_allow_html=True)
+                    
+            with st.expander("🔍 Results for PCA", expanded=True):
+                plot_pca_results(annual_data[selected_columns], len(selected_columns))
 
-st.write("##### Current ticket priorities")
-priority_plot = (
-    alt.Chart(edited_df)
-    .mark_arc()
-    .encode(theta="count():Q", color="Priority:N")
-    .properties(height=300)
-    .configure_legend(
-        orient="bottom", titleFontSize=14, labelFontSize=14, titlePadding=5
-    )
-)
-st.altair_chart(priority_plot, use_container_width=True, theme="streamlit")
+            with st.expander("**Select the number of factors for PCA for a more specific analysis**", expanded=False):
+                num_factors = st.number_input(
+                    "Choose the number of factors:", min_value=1, max_value=annual_data[selected_columns].shape[1] - 1, value=2
+                )
+
+                # Exibir a análise PCA se o número de fatores for válido
+                if num_factors > 0:
+                    plot_pca_results(annual_data[selected_columns], num_factors)
+                else:
+                    st.warning("Please, select a valid number of factors less than the number of columns selected.")
+
+
+
+    elif indicador == 'BPSTAT Data':
+
+        st.markdown(container_style_html, unsafe_allow_html=True)
+
+        with st.container():
+            st.markdown(f"""    
+            <div style='text-align: center; margin-bottom: 30px;'>
+                <h1 style='color: {default_color1};'>BPSTAT Data - Principal Component Analysis</h1>
+                <p style='color: #666; font-size: 16px;'>Make your PCA analysis</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Seção de visualização de dados
+        with st.expander("🔍 Data preview", expanded=False):
+            st.dataframe(df_final.head(3), use_container_width=True, hide_index=True)
+
+        # Seleção de colunas (sem nenhuma coluna selecionada por padrão)
+        selected_columns = st.multiselect(
+            "Choose the variables for the PCA:", options=df_final.columns.tolist()[1:], default=['Current ratio-J58 Publishing',
+                                                                                                               'Current ratio-F Construction',
+                                                                                                               'Current ratio-C20 Chemicals',
+                                                                                                               'Current ratio-I56 Food service activities']
+        )
+
+        if not selected_columns:
+            st.warning("Please, select at least 3 columns for the PCA.")
+        else:
+
+            with st.expander("🔍 Dataframe for PCA", expanded=False):
+                # Verificar se o usuário selecionou colunas
+                if selected_columns:
+                    # Mostrar o DataFrame com as colunas selecionadas
+                    st.markdown(f"""<div style='text-align: center;'>
+                                        <h6 style='color: {default_color1};'>Dataframe with the selected columns</h6>
+                                    </div>""", unsafe_allow_html=True)
+                    
+                    st.dataframe(df_final[selected_columns], use_container_width=True, hide_index=True)
+                else:
+                    st.markdown(f"""<div style='text-align: center;'>
+                                        <h6 style='color: {default_color1};'>Select variables for PCA</h6>
+                                    </div>""", unsafe_allow_html=True)
+                    
+            with st.expander("🔍 Results for PCA", expanded=True):
+                plot_pca_results(df_final[selected_columns], len(selected_columns))
+
+            with st.expander("**Select the number of factors for PCA for a more specific analysis**", expanded=False):
+                num_factors = st.number_input(
+                    "Choose the number of factors:", min_value=1, max_value=df_final[selected_columns].shape[1] - 1, value=2
+                )
+
+                # Exibir a análise PCA se o número de fatores for válido
+                if num_factors > 0:
+                    plot_pca_results(df_final[selected_columns], num_factors)
+                else:
+                    st.warning("Please, select a valid number of factors less than the number of columns selected.")
+        
+    elif indicador == 'Macroeconomic ECB & BPSTAT data':
+        
+        st.markdown(container_style_html, unsafe_allow_html=True)
+
+        with st.container():
+            st.markdown(f"""    
+            <div style='text-align: center; margin-bottom: 30px;'>
+                <h1 style='color: {default_color1};'>BPSTAT Data - Principal Component Analysis</h1>
+                <p style='color: #666; font-size: 16px;'>Make your PCA analysis</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Seção de visualização de dados
+        with st.expander("🔍 Data preview", expanded=False):
+            st.dataframe(final_dataset.head(3), use_container_width=True, hide_index=True)
+
+        # Seleção de colunas (sem nenhuma coluna selecionada por padrão)
+        selected_columns = st.multiselect(
+            "Choose the variables for the PCA:", options=final_dataset.columns.tolist()[1:], default=['Current ratio-J58 Publishing',
+                                                                                                               'Current ratio-F Construction',
+                                                                                                               'Current ratio-C20 Chemicals',
+                                                                                                               'Current ratio-I56 Food service activities']
+        )
+
+        if not selected_columns:
+            st.warning("Please, select at least 3 columns for the PCA.")
+        else:
+
+            with st.expander("🔍 Dataframe for PCA", expanded=False):
+                # Verificar se o usuário selecionou colunas
+                if selected_columns:
+                    # Mostrar o DataFrame com as colunas selecionadas
+                    st.markdown(f"""<div style='text-align: center;'>
+                                        <h6 style='color: {default_color1};'>Dataframe with the selected columns</h6>
+                                    </div>""", unsafe_allow_html=True)
+                    
+                    st.dataframe(final_dataset[selected_columns], use_container_width=True, hide_index=True)
+                else:
+                    st.markdown(f"""<div style='text-align: center;'>
+                                        <h6 style='color: {default_color1};'>Select variables for PCA</h6>
+                                    </div>""", unsafe_allow_html=True)
+                    
+            with st.expander("🔍 Results for PCA", expanded=True):
+                plot_pca_results(final_dataset[selected_columns], len(selected_columns))
+
+            with st.expander("**Select the number of factors for PCA for a more specific analysis**", expanded=False):
+                num_factors = st.number_input(
+                    "Choose the number of factors:", min_value=1, max_value=df_final[selected_columns].shape[1] - 1, value=2
+                )
+
+                # Exibir a análise PCA se o número de fatores for válido
+                if num_factors > 0:
+                    plot_pca_results(final_dataset[selected_columns], num_factors)
+                else:
+                    st.warning("Please, select a valid number of factors less than the number of columns selected.")      
+
+
+############################################################################################################################################
+
+elif indicador == "Correlation Matrix":
+
+    st.markdown(container_style_html, unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown(f"""    
+        <div style='text-align: center; margin-bottom: 30px;'>
+            <h1 style='color: {default_color1};'>Correlation analysis</h1>
+            <p style='color: #666; font-size: 16px;'>Make your correlation Matrixs</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Seção de visualização de dados
+    with st.expander("🔍 Data preview", expanded=False):
+        df_corr_styled = dataframe_with_green_background(final_dataset.head(5))
+
+        # Exibir autovetores
+        st.markdown(df_corr_styled, unsafe_allow_html=True)
+        #st.dataframe(final_dataset.head(3), use_container_width=True, hide_index=True)
+
+    with st.expander("🔍 Data preview", expanded=True):
+
+        start_date, end_date = st.slider(
+            'Select the date range',
+            min_value=final_dataset['TIME_PERIOD'].min(),
+            max_value=final_dataset['TIME_PERIOD'].max(),
+            value=(2010, 2023)
+        )
+
+        corr_selected_columns = st.multiselect(
+            'Select columns for correlation matrix',
+            options=final_dataset.columns[1:],
+            default=final_dataset.columns[1:6],
+            label_visibility="visible",
+            help="Press Ctrl to select more than one column",
+            key='selected_columns',
+        )
+
+        corr_selected_columns.append('TIME_PERIOD')
+
+        st.markdown(button_css, unsafe_allow_html=True)
+
+        if st.button('Generate Correlation Matrix'):
+            #st.write(final_dataset[
+            #    (final_dataset['TIME_PERIOD'] >= start_date) & (final_dataset['TIME_PERIOD'] <= end_date) 
+            #     ][corr_selected_columns]
+            #)
+            df_corr_plot = final_dataset[
+                                (final_dataset['TIME_PERIOD'] >= start_date) & (final_dataset['TIME_PERIOD'] <= end_date) 
+                                        ][corr_selected_columns]
+
+            plot_interact_corr_matrix(df_corr_plot, start_date, end_date, corr_selected_columns)
+
+
+elif indicador == 'Plots':
+
+    plot_selected_columns = st.multiselect(
+    'Select columns to plot',
+    options=final_dataset.columns[1:],
+    default=['Unemployment rate, Portugal', 'Government final consumption, Portugal'])
+
+    plot_selected_columns.append('TIME_PERIOD')
+
+    plot_interactive_graph(final_dataset[plot_selected_columns])
+
