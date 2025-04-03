@@ -9,3 +9,4 @@ pyjstat
 openpyxl
 xlsxwriter
 yfinance
+ecbdata
