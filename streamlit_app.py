@@ -16,7 +16,7 @@ import seaborn as sns
 import numpy as np
 
 
-@st.cache_data(ttl=3600)  # Atualiza os dados a cada 3600 segundos (1 hora)
+@st.cache_data(ttl=3600*24)  # Atualiza os dados a cada 3600 segundos (1 hora)
 def get_data_cached():
     return load_data()
 
